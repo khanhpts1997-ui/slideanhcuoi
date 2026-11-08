@@ -1227,17 +1227,23 @@ async function exportVideo() {
   const long = short * 16 / 9, W = vertical ? short : long, H = vertical ? long : short;
   const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
   const vp = vidPhotos(), c = vidCfg(cfg("video")), scenes = withStudio(SE.build("video", vp.length, c)), dur = SE.total(scenes);
-  const eng = SE.Engine(cv, { studio: studioInfo(), style: val("style"), photos: vp, info: info(), sec: c.sec, mark: c.mark, trans: c.trans, trs: c.trs, frame: c.frame, tfx: c.tfx, subs: c.subs, look: c.look, looks: c.looks, scenes, auto: true, loop: false, hq: true, sharp: true });
-  let lastE = 0;
-  record({ cv, dur, vertical, beat0: c.beat0, best: plan.pro && $("vbest").checked, name: slug() + (vertical ? "-doc" : ""), draw: (e) => { eng.step(e - lastE); lastE = e; eng.render(); stampLogo(cv); } });
+  // A fresh Engine and lastE per attempt: record() tries several export methods in turn, and if one fails partway
+  // through (e.g. the x264 path crashing after rendering some minutes of video), reusing the same engine/lastE for
+  // the next method would carry its half-finished playback time over, making the next attempt's clock jump
+  // backwards and freeze on the first photo for however long the failed attempt had gotten through.
+  const mkDraw = () => { const eng = SE.Engine(cv, { studio: studioInfo(), style: val("style"), photos: vp, info: info(), sec: c.sec, mark: c.mark, trans: c.trans, trs: c.trs, frame: c.frame, tfx: c.tfx, subs: c.subs, look: c.look, looks: c.looks, scenes, auto: true, loop: false, hq: true, sharp: true }); let lastE = 0; return (e) => { eng.step(e - lastE); lastE = e; eng.render(); stampLogo(cv); }; };
+  record({ cv, dur, vertical, beat0: c.beat0, best: plan.pro && $("vbest").checked, name: slug() + (vertical ? "-doc" : ""), mkDraw });
 }
 /* Record a canvas animation as a video with the album's music: draw(e) paints second e.
    Chrome/Edge: render frame by frame at exactly 30 fps with WebCodecs and mux an MP4, so the file is smooth
-   however slow the computer is and even if the tab is hidden. Other browsers: live capture (recordLive). */
+   however slow the computer is and even if the tab is hidden. Other browsers: live capture (recordLive).
+   o.mkDraw (when given) builds a fresh draw() + its own state for each attempt, so a method that fails partway
+   through never leaves stale progress for the next method to stumble on; o.draw is used as-is otherwise. */
 async function record(o) {
+  const attempt = (fn, sw) => fn({ ...o, draw: o.mkDraw ? o.mkDraw() : o.draw }, sw);
   if (o.best) {
     let r = "no";
-    try { r = await recordBest(o); } catch (e) { console.warn("x264 export failed", e); r = "no"; }
+    try { r = await attempt(recordBest); } catch (e) { console.warn("x264 export failed", e); r = "no"; }
     if (r !== "no") return;
     $("goNote").classList.add("err"); $("goNote").textContent = "Không chạy được chế độ chất lượng cao nhất trên máy này, đang xuất theo cách thường...";
   }
@@ -1245,10 +1251,10 @@ async function record(o) {
   // which is real-time and drops frames on a slow or busy computer, so it is the last resort.
   for (const sw of [false, true]) {
     let r = "no";
-    try { r = await recordOffline(o, sw); } catch (e) { console.warn("offline export failed", e); r = "no"; }
+    try { r = await attempt(recordOffline, sw); } catch (e) { console.warn("offline export failed", e); r = "no"; }
     if (r !== "no") return;
   }
-  return recordLive(o);
+  return attempt(recordLive);
 }
 const FPS = 30;
 const nextTask = () => new Promise((r) => { const m = new MessageChannel(); m.port1.onmessage = () => r(); m.port2.postMessage(0); });
