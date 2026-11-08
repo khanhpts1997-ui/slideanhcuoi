@@ -18,7 +18,11 @@ export default async function handler(req, res) {
       const r = await fetch(url + "/rest/v1/rpc/get_invite", { method: "POST", headers: h, body: JSON.stringify({ p_slug: slug }) });
       inv = r.ok ? await r.json() : null;
       if (inv) {
-        const d = inv.data || {}, pics = Array.isArray(d.pics) && d.pics.length ? d.pics : inv.photos.slice(0, 18);
+        // only sign photos still in the album (an album reused for a new couple keeps old picks in data)
+        const d = inv.data || {}, inAlbum = new Set(inv.photos);
+        if (d.cover && !inAlbum.has(d.cover)) d.cover = "";
+        if (Array.isArray(d.pics)) d.pics = d.pics.filter((p) => inAlbum.has(p));
+        const pics = Array.isArray(d.pics) && d.pics.length ? d.pics : inv.photos.slice(0, 18);
         const want = [...new Set([d.cover || inv.photos[0], ...pics, d.music].filter(Boolean))];
         inv.url = {};
         if (want.length) {

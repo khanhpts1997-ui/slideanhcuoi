@@ -79,7 +79,6 @@ async function load() {
   events = Array.isArray(d.events) ? d.events.map((e) => ({ ...e })) : [];
   gifts = Array.isArray(d.gifts) ? d.gifts.map((g) => ({ ...g })) : [];
   for (const [role, , who] of ROLES) { const g = account(role); accs[role] = g ? { ...g, role, other: !g.bin && !!g.bank } : { role, who, bin: "", bank: "", acc: "", holder: "" }; }
-  if (M.published && M.slug) { $("view").href = "/t/" + M.slug; $("view").hidden = false; }
   drawEvents(); drawAccs(); $("form").hidden = false; $("state").textContent = "Đã lưu";
 }
 function collect() {

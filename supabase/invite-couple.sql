@@ -11,11 +11,11 @@ create or replace function public.couple_keys() returns text[] language sql immu
   select array['groomFull', 'brideFull', 'groomFam', 'brideFam', 'events', 'gifts']
 $$;
 
--- What the couple's page shows: names, date and the fields they can edit.
+-- What the couple's page shows: names, date and the fields they can edit (not the invitation's link).
 create or replace function public.couple_get(p_token text) returns json
 language sql stable security definer set search_path = public as $$
   select json_build_object(
-    'groom', a.groom, 'bride', a.bride, 'date', a.wedding_date, 'slug', i.slug, 'published', i.published,
+    'groom', a.groom, 'bride', a.bride, 'date', a.wedding_date,
     'data', (select coalesce(jsonb_object_agg(k, i.data->k), '{}'::jsonb) from unnest(public.couple_keys()) k where i.data ? k))
   from public.invites i join public.albums a on a.id = i.album_id
   where length(coalesce(p_token, '')) >= 24 and i.couple_token = p_token
