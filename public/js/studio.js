@@ -1260,14 +1260,20 @@ const FPS = 30;
 const nextTask = () => new Promise((r) => { const m = new MessageChannel(); m.port1.onmessage = () => r(); m.port2.postMessage(0); });
 let muxerLib = null;
 function loadMuxer() { return muxerLib || (muxerLib = new Promise((ok, no) => { if (window.Mp4Muxer) return ok(window.Mp4Muxer); const s = document.createElement("script"); s.src = "/js/vendor/mp4-muxer.js"; s.onload = () => ok(window.Mp4Muxer); s.onerror = () => { muxerLib = null; no(new Error("muxer")); }; document.head.appendChild(s); })); }
+// Canvas pixels are plain sRGB; tag the encoded bitstream as such (BT.709 primaries/matrix, limited range, sRGB
+// transfer) so a hardware encoder that would otherwise leave colour metadata unset (seen on Mac/VideoToolbox) can't
+// make a player guess the wrong YUV<->RGB matrix. A wrong guess here is exactly what shows up as desaturated colour.
+const RGB_COLORSPACE = { primaries: "bt709", transfer: "iec61966-2-1", matrix: "bt709", fullRange: false };
 async function pickVideoCfg(W, H, sw) {
   // Slow zooms over soft wedding photos and blurred backgrounds need plenty of bits or they smear and band.
   const px = W * H, bitrate = px > 4e6 ? 40e6 : px > 2.2e6 ? 24e6 : px > 1e6 ? 16e6 : 8e6;
   // H.264 levels: 4.0/4.2 up to 1080p, 5.0/5.1 for 1440p, 5.1/5.2 for 4K.
   const levels = px > 4e6 ? ["33", "34"] : px > 2.2e6 ? ["32", "33"] : ["28", "2a"];
   for (const codec of ["64", "4d", "42"].flatMap((p) => levels.map((l) => `avc1.${p}00${l}`))) {
-    const cfg = { codec, width: W, height: H, bitrate, framerate: FPS, avc: { format: "avc" }, hardwareAcceleration: sw ? "prefer-software" : "no-preference" };
-    try { if ((await VideoEncoder.isConfigSupported(cfg)).supported) return cfg; } catch {}
+    for (const colorSpace of [RGB_COLORSPACE, undefined]) {
+      const cfg = { codec, width: W, height: H, bitrate, framerate: FPS, avc: { format: "avc" }, hardwareAcceleration: sw ? "prefer-software" : "no-preference", ...(colorSpace ? { colorSpace } : {}) };
+      try { if ((await VideoEncoder.isConfigSupported(cfg)).supported) return cfg; } catch {}
+    }
   }
   return null;
 }
