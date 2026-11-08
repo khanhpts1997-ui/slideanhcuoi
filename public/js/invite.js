@@ -57,6 +57,9 @@ $("countOn").checked = d.count !== false; $("petalsOn").checked = d.petals !== f
 $("rsvpOn").checked = d.rsvp !== false; $("wishOn").checked = d.wishes !== false;
 $("slug").value = row ? row.slug : suggestSlug(); $("published").checked = row ? row.published : false;
 if (!d.layout) d.layout = "classic";
+// Forget picked photos that are no longer in the album (album reused for another couple, photos deleted).
+if (d.cover && !photos.includes(d.cover)) delete d.cover;
+if (Array.isArray(d.pics)) { const keep = d.pics.filter((p) => photos.includes(p)); d.pics = keep.length || !d.pics.length ? keep : undefined; }
 // Two account cards to start with, one for the groom and one for the bride (empty ones are not shown to guests).
 if (!d.gifts || !d.gifts.length) d.gifts = [{ role: "groom", who: "Mừng cưới chú rể", bin: "", bank: "", acc: "", holder: "" }, { role: "bride", who: "Mừng cưới cô dâu", bin: "", bank: "", acc: "", holder: "" }];
 function musicOptions() {

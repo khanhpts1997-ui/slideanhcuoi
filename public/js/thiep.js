@@ -51,6 +51,10 @@ function render(model) {
   text($("issue"), "Vol. 01 · " + (dotDate(M.date) || "Our wedding"));
   for (const id of ["gGuest", "guest"]) { $(id).hidden = !guestName; text($(id), guestName ? `Trân trọng kính mời ${guestName}` : ""); }
 
+  // Only photos that are still in the album: an album reused for a new couple must never show the old couple's picks.
+  const inAlbum = new Set(M.photos || []);
+  if (d.cover && !inAlbum.has(d.cover)) d.cover = "";
+  if (Array.isArray(d.pics)) d.pics = d.pics.filter((p) => inAlbum.has(p));
   const cover = M.url[d.cover] || M.url[M.photos[0]] || "";
   $("heroImg").style.backgroundImage = cover ? `url("${cover}")` : "";
   $("hero").classList.toggle("noimg", !cover);
@@ -214,7 +218,10 @@ async function load() {
   if (!slug) return fail("Link thiệp chưa đúng.");
   const inv = await api("/rest/v1/rpc/get_invite", { p_slug: slug });
   if (!inv) return fail("Thiệp này chưa mở hoặc đã đóng.");
-  const d = inv.data || {}, wanted = new Set([d.cover, ...(d.pics && d.pics.length ? d.pics : inv.photos.slice(0, 18)), d.music].filter(Boolean));
+  const d = inv.data || {}, inAlbum = new Set(inv.photos);
+  if (d.cover && !inAlbum.has(d.cover)) d.cover = "";
+  if (Array.isArray(d.pics)) d.pics = d.pics.filter((p) => inAlbum.has(p));
+  const wanted = new Set([d.cover, ...(d.pics && d.pics.length ? d.pics : inv.photos.slice(0, 18)), d.music].filter(Boolean));
   if (!d.cover && inv.photos[0]) wanted.add(inv.photos[0]);
   inv.url = await signAll([...wanted]);
   render(inv);
